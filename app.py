@@ -148,11 +148,11 @@ def add_logo():
     """Add a logo to the sidebar"""
     st.sidebar.markdown(
         """
-        <div style="text-align: center; padding: 1rem 0;">
-            <h2 style="color: #4267B2;">
-                <span style="color: #4267B2;">📊</span> ProductPulse
+        <div style="text-align: center; padding: 1.5rem 0; background: linear-gradient(135deg, #4267B2, #5B86E5); border-radius: 0.5rem; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+            <h2 style="color: white; margin: 0; font-weight: 600;">
+                <span style="margin-right: 10px;">📊</span> ProductPulse
             </h2>
-            <p style="font-size: 0.8rem; color: #666;">
+            <p style="font-size: 0.9rem; color: rgba(255, 255, 255, 0.8); margin-top: 0.5rem;">
                 Advanced Analytics for Product Managers
             </p>
         </div>
@@ -212,8 +212,23 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Create tabs for data input methods
-    input_tab1, input_tab2 = st.tabs(["Upload Data", "Saved Datasets"])
+    # Create tabs for data input methods with custom styling
+    st.markdown("""
+    <style>
+        div[data-testid="stHorizontalBlock"] {
+            background-color: #F0F2F5;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        div[data-testid="stVerticalBlock"] div[data-testid="stHorizontalBlock"] {
+            background-color: transparent;
+            padding: 0;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    input_tab1, input_tab2 = st.tabs(["📤 Upload Data", "📁 Saved Datasets"])
     
     with input_tab1:
         st.header("Data Input")
@@ -508,7 +523,31 @@ if st.session_state.data is not None:
                     buffer.write(f"- {insight}\n")
                 
                 buffer.write("\n## Summary Statistics\n\n")
-                buffer.write(data.describe().to_markdown())
+                # Convert the describe dataframe to a string format manually instead of using to_markdown()
+                # Using a safer approach to format statistics
+                stats_df = data.describe().reset_index()
+                
+                # Get column names as strings
+                header = ["Statistic"]
+                for col in stats_df.columns[1:]:
+                    header.append(str(col))
+                
+                buffer.write("| " + " | ".join(header) + " |\n")
+                buffer.write("| " + " | ".join(["---" for _ in range(len(header))]) + " |\n")
+                
+                # Process each row
+                for idx in range(len(stats_df)):
+                    row_values = [str(stats_df.iloc[idx, 0])]  # First column (statistic name)
+                    
+                    # Process numeric columns
+                    for col_idx in range(1, len(stats_df.columns)):
+                        val = stats_df.iloc[idx, col_idx]
+                        if isinstance(val, (int, float)):
+                            row_values.append(f"{val:.2f}")
+                        else:
+                            row_values.append(str(val))
+                    
+                    buffer.write("| " + " | ".join(row_values) + " |\n")
                 
                 # Convert to string and create download button
                 report_data = buffer.getvalue()
