@@ -5,59 +5,114 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 
-# Get the database URL from environment variables
-DATABASE_URL = os.environ.get("DATABASE_URL")
+# Get the database URL from environment variables or use a default SQLite database
+DATABASE_URL = os.environ.get("DATABASE_URL") or "sqlite:///productpulse.db"
 
-# Create SQLAlchemy engine and session
-engine = create_engine(DATABASE_URL)
-Session = sessionmaker(bind=engine)
-session = Session()
+# Set up SQLAlchemy but handle connection errors gracefully
+try:
+    # Create SQLAlchemy engine and session
+    engine = create_engine(DATABASE_URL)
+    Session = sessionmaker(bind=engine)
+    session = Session()
 
-# Create metadata object
-metadata = MetaData()
+    # Create metadata object
+    metadata = MetaData()
 
-# Define tables
-datasets = Table(
-    'datasets', 
-    metadata, 
-    Column('id', Integer, primary_key=True),
-    Column('name', String, nullable=False, unique=True),
-    Column('description', String),
-    Column('created_at', DateTime, default=datetime.now),
-    Column('last_modified', DateTime, default=datetime.now, onupdate=datetime.now),
-    Column('rows', Integer),
-    Column('columns', Integer)
-)
+    # Define tables
+    datasets = Table(
+        'datasets', 
+        metadata, 
+        Column('id', Integer, primary_key=True),
+        Column('name', String, nullable=False, unique=True),
+        Column('description', String),
+        Column('created_at', DateTime, default=datetime.now),
+        Column('last_modified', DateTime, default=datetime.now, onupdate=datetime.now),
+        Column('rows', Integer),
+        Column('columns', Integer)
+    )
 
-# Table for storing column metadata
-columns = Table(
-    'columns',
-    metadata,
-    Column('id', Integer, primary_key=True),
-    Column('dataset_id', Integer),
-    Column('name', String, nullable=False),
-    Column('data_type', String),
-    Column('is_metric', Boolean, default=False),
-    Column('is_dimension', Boolean, default=False),
-    Column('is_time', Boolean, default=False)
-)
+    # Table for storing column metadata
+    columns = Table(
+        'columns',
+        metadata,
+        Column('id', Integer, primary_key=True),
+        Column('dataset_id', Integer),
+        Column('name', String, nullable=False),
+        Column('data_type', String),
+        Column('is_metric', Boolean, default=False),
+        Column('is_dimension', Boolean, default=False),
+        Column('is_time', Boolean, default=False)
+    )
 
-# Table for storing saved analysis
-saved_analysis = Table(
-    'saved_analysis',
-    metadata,
-    Column('id', Integer, primary_key=True),
-    Column('dataset_id', Integer),
-    Column('name', String, nullable=False),
-    Column('description', String),
-    Column('created_at', DateTime, default=datetime.now),
-    Column('analysis_type', String),  # 'dashboard', 'trend', 'segment', etc.
-    Column('configuration', String),  # JSON string with analysis parameters
-    Column('insights', String)  # JSON string with generated insights
-)
+    # Table for storing saved analysis
+    saved_analysis = Table(
+        'saved_analysis',
+        metadata,
+        Column('id', Integer, primary_key=True),
+        Column('dataset_id', Integer),
+        Column('name', String, nullable=False),
+        Column('description', String),
+        Column('created_at', DateTime, default=datetime.now),
+        Column('analysis_type', String),  # 'dashboard', 'trend', 'segment', etc.
+        Column('configuration', String),  # JSON string with analysis parameters
+        Column('insights', String)  # JSON string with generated insights
+    )
 
-# Create all tables if they don't exist
-metadata.create_all(engine)
+    # Create all tables if they don't exist
+    metadata.create_all(engine)
+except Exception as e:
+    print(f"Database connection error: {e}")
+    # Set up fallback in-memory mode
+    try:
+        DATABASE_URL = "sqlite:///:memory:"
+        engine = create_engine(DATABASE_URL)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        metadata = MetaData()
+        
+        # Redefine tables for in-memory database
+        datasets = Table(
+            'datasets', 
+            metadata, 
+            Column('id', Integer, primary_key=True),
+            Column('name', String, nullable=False, unique=True),
+            Column('description', String),
+            Column('created_at', DateTime, default=datetime.now),
+            Column('last_modified', DateTime, default=datetime.now, onupdate=datetime.now),
+            Column('rows', Integer),
+            Column('columns', Integer)
+        )
+
+        columns = Table(
+            'columns',
+            metadata,
+            Column('id', Integer, primary_key=True),
+            Column('dataset_id', Integer),
+            Column('name', String, nullable=False),
+            Column('data_type', String),
+            Column('is_metric', Boolean, default=False),
+            Column('is_dimension', Boolean, default=False),
+            Column('is_time', Boolean, default=False)
+        )
+
+        saved_analysis = Table(
+            'saved_analysis',
+            metadata,
+            Column('id', Integer, primary_key=True),
+            Column('dataset_id', Integer),
+            Column('name', String, nullable=False),
+            Column('description', String),
+            Column('created_at', DateTime, default=datetime.now),
+            Column('analysis_type', String),
+            Column('configuration', String),
+            Column('insights', String)
+        )
+        
+        # Create all tables in memory
+        metadata.create_all(engine)
+        print("Using in-memory database as fallback")
+    except Exception as e:
+        print(f"Failed to set up in-memory database: {e}")
 
 def save_dataset(df, name, description=""):
     """
@@ -135,7 +190,8 @@ def save_dataset(df, name, description=""):
         
     except Exception as e:
         session.rollback()
-        raise e
+        print(f"Error saving dataset: {e}")
+        return None
 
 def get_saved_datasets():
     """
@@ -154,7 +210,9 @@ def get_saved_datasets():
             return pd.DataFrame(columns=datasets.c.keys())
             
     except Exception as e:
-        raise e
+        print(f"Error fetching saved datasets: {e}")
+        # Return empty DataFrame with expected columns
+        return pd.DataFrame(columns=['id', 'name', 'description', 'created_at', 'last_modified', 'rows', 'columns'])
 
 def load_dataset(dataset_id):
     """
@@ -192,7 +250,11 @@ def load_dataset(dataset_id):
         return df, column_df
         
     except Exception as e:
-        raise e
+        print(f"Error loading dataset: {e}")
+        # Return empty DataFrame and columns
+        empty_df = pd.DataFrame()
+        empty_columns = pd.DataFrame(columns=['id', 'dataset_id', 'name', 'data_type', 'is_metric', 'is_dimension', 'is_time'])
+        return empty_df, empty_columns
 
 def delete_dataset(dataset_id):
     """
@@ -224,7 +286,8 @@ def delete_dataset(dataset_id):
         
     except Exception as e:
         session.rollback()
-        raise e
+        print(f"Error deleting dataset: {e}")
+        return False
 
 def save_analysis(dataset_id, name, analysis_type, configuration, insights, description=""):
     """
@@ -285,7 +348,8 @@ def save_analysis(dataset_id, name, analysis_type, configuration, insights, desc
         
     except Exception as e:
         session.rollback()
-        raise e
+        print(f"Error saving analysis: {e}")
+        return None
 
 def get_saved_analyses(dataset_id=None):
     """
@@ -311,7 +375,10 @@ def get_saved_analyses(dataset_id=None):
             return pd.DataFrame(columns=saved_analysis.c.keys())
             
     except Exception as e:
-        raise e
+        print(f"Error fetching saved analyses: {e}")
+        # Return empty DataFrame with expected columns
+        return pd.DataFrame(columns=['id', 'dataset_id', 'name', 'description', 'created_at', 
+                                     'analysis_type', 'configuration', 'insights'])
 
 def load_analysis(analysis_id):
     """
@@ -339,11 +406,13 @@ def load_analysis(analysis_id):
         return analysis_info, configuration, insights
         
     except Exception as e:
-        raise e
+        print(f"Error loading analysis: {e}")
+        # Return empty analysis
+        return {}, {}, []
 
 def delete_analysis(analysis_id):
     """
-    Delete an analysis
+    Delete an analysis from the database
     
     Args:
         analysis_id (int): ID of the analysis to delete
@@ -352,6 +421,7 @@ def delete_analysis(analysis_id):
         bool: True if successful
     """
     try:
+        # Delete analysis entry
         session.execute(
             saved_analysis.delete().where(saved_analysis.c.id == analysis_id)
         )
@@ -361,4 +431,5 @@ def delete_analysis(analysis_id):
         
     except Exception as e:
         session.rollback()
-        raise e
+        print(f"Error deleting analysis: {e}")
+        return False
