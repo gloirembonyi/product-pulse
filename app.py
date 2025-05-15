@@ -2,12 +2,18 @@ import streamlit as st
 import pandas as pd
 import io
 import base64
+import json
+import uuid
 from datetime import datetime
 import plotly.express as px
 from utils.data_processor import clean_data, detect_data_type, prepare_sample_data
 from utils.visualization import create_dashboard, create_trend_plot, create_distribution_plot
 from utils.analysis import perform_trend_analysis, segment_data
 from utils.chatbot import process_query, generate_insights
+from utils.database import (
+    save_dataset, get_saved_datasets, load_dataset, delete_dataset,
+    save_analysis, get_saved_analyses, load_analysis, delete_analysis
+)
 
 # Set page config
 st.set_page_config(
@@ -130,6 +136,12 @@ if 'dashboard_tab' not in st.session_state:
     st.session_state.dashboard_tab = 0
 if 'refresh_insights' not in st.session_state:
     st.session_state.refresh_insights = False
+if 'current_dataset_id' not in st.session_state:
+    st.session_state.current_dataset_id = None
+if 'current_dataset_name' not in st.session_state:
+    st.session_state.current_dataset_name = ""
+if 'saved_analyses' not in st.session_state:
+    st.session_state.saved_analyses = None
 
 # Helper functions
 def add_logo():
@@ -162,63 +174,167 @@ def format_number(num):
     else:
         return f"{num:.1f}"
 
+# Functions for database operations
+def load_saved_dataset(dataset_id):
+    """Load a dataset from the database"""
+    try:
+        with st.spinner("Loading dataset from database..."):
+            df, column_data = load_dataset(dataset_id)
+            
+            # Set up metrics, dimensions and time columns
+            metrics = column_data[column_data['is_metric']]['name'].tolist()
+            dimensions = column_data[column_data['is_dimension']]['name'].tolist()
+            time_columns = column_data[column_data['is_time']]['name'].tolist()
+            
+            # Extract dataset name
+            all_datasets = get_saved_datasets()
+            dataset_name = all_datasets[all_datasets['id'] == dataset_id]['name'].iloc[0]
+            
+            # Store in session state
+            st.session_state.data = df
+            st.session_state.metrics = metrics
+            st.session_state.dimensions = dimensions
+            st.session_state.time_columns = time_columns
+            st.session_state.current_dataset_id = dataset_id
+            st.session_state.current_dataset_name = dataset_name
+            
+            # Generate auto insights
+            st.session_state.auto_insights = generate_insights(df)
+            
+            return True
+    except Exception as e:
+        st.error(f"Error loading dataset: {e}")
+        return False
+
 # Sidebar for data upload and configuration
 with st.sidebar:
     add_logo()
     
     st.markdown("---")
-    st.header("Data Input")
     
-    # File upload with nicer UI
-    uploaded_file = st.file_uploader("Upload your CSV data", type=["csv"])
+    # Create tabs for data input methods
+    input_tab1, input_tab2 = st.tabs(["Upload Data", "Saved Datasets"])
     
-    if uploaded_file is not None:
+    with input_tab1:
+        st.header("Data Input")
+        
+        # File upload with nicer UI
+        uploaded_file = st.file_uploader("Upload your CSV data", type=["csv"])
+        
+        if uploaded_file is not None:
+            try:
+                with st.spinner("Processing your data..."):
+                    # Read the data
+                    data = pd.read_csv(uploaded_file)
+                    
+                    # Clean the data
+                    data = clean_data(data)
+                    
+                    # Detect data types and columns
+                    data_types, metrics, dimensions, time_columns = detect_data_type(data)
+                    
+                    # Store in session state
+                    st.session_state.data = data
+                    st.session_state.data_types = data_types
+                    st.session_state.metrics = metrics
+                    st.session_state.dimensions = dimensions
+                    st.session_state.time_columns = time_columns
+                    
+                    # Reset current dataset ID (this is a new upload)
+                    st.session_state.current_dataset_id = None
+                    st.session_state.current_dataset_name = uploaded_file.name.replace(".csv", "")
+                    
+                    # Generate auto insights
+                    st.session_state.auto_insights = generate_insights(data)
+                    
+                    st.success(f"✅ Loaded data: {data.shape[0]} rows × {data.shape[1]} columns")
+            except Exception as e:
+                st.error(f"Error loading data: {e}")
+        
+        # Sample data option with a nicer button
+        if st.session_state.data is None:
+            st.markdown(
+                """
+                <div style="text-align: center; margin: 1rem 0;">
+                    <p>No data uploaded yet. You can:</p>
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
+            if st.button("📊 Use Sample Product Analytics Data"):
+                with st.spinner("Generating sample data..."):
+                    st.session_state.data, st.session_state.data_types, st.session_state.metrics, st.session_state.dimensions, st.session_state.time_columns = prepare_sample_data()
+                    # Reset current dataset ID (this is sample data)
+                    st.session_state.current_dataset_id = None
+                    st.session_state.current_dataset_name = "Sample Product Analytics"
+                    # Generate auto insights
+                    st.session_state.auto_insights = generate_insights(st.session_state.data)
+                    st.success("✅ Sample product analytics data loaded!")
+    
+    with input_tab2:
+        st.header("Saved Datasets")
+        
+        # Display saved datasets
         try:
-            with st.spinner("Processing your data..."):
-                # Read the data
-                data = pd.read_csv(uploaded_file)
+            saved_datasets = get_saved_datasets()
+            
+            if not saved_datasets.empty:
+                # Format the dataset list
+                for _, row in saved_datasets.iterrows():
+                    st.markdown(f"""
+                    <div style="margin-bottom: 0.5rem; padding: 0.5rem; background-color: #F8F9FA; border-radius: 0.3rem;">
+                        <strong>{row['name']}</strong><br>
+                        <small>{row['rows']} rows, {row['columns']} columns</small><br>
+                        <small>Last modified: {row['last_modified'].strftime('%Y-%m-%d')}</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    col1, col2 = st.columns([1, 1])
+                    with col1:
+                        if st.button(f"📂 Load", key=f"load_{row['id']}"):
+                            if load_saved_dataset(row['id']):
+                                st.success(f"Dataset '{row['name']}' loaded successfully!")
+                    with col2:
+                        if st.button(f"🗑️ Delete", key=f"delete_{row['id']}"):
+                            if delete_dataset(row['id']):
+                                st.success(f"Dataset '{row['name']}' deleted.")
+                                st.rerun()
+            else:
+                st.info("No saved datasets found. Upload a dataset and save it first.")
                 
-                # Clean the data
-                data = clean_data(data)
-                
-                # Detect data types and columns
-                data_types, metrics, dimensions, time_columns = detect_data_type(data)
-                
-                # Store in session state
-                st.session_state.data = data
-                st.session_state.data_types = data_types
-                st.session_state.metrics = metrics
-                st.session_state.dimensions = dimensions
-                st.session_state.time_columns = time_columns
-                
-                # Generate auto insights
-                st.session_state.auto_insights = generate_insights(data)
-                
-                st.success(f"✅ Loaded data: {data.shape[0]} rows × {data.shape[1]} columns")
         except Exception as e:
-            st.error(f"Error loading data: {e}")
-    
-    # Sample data option with a nicer button
-    if st.session_state.data is None:
-        st.markdown(
-            """
-            <div style="text-align: center; margin: 1rem 0;">
-                <p>No data uploaded yet. You can:</p>
-            </div>
-            """, 
-            unsafe_allow_html=True
-        )
-        if st.button("📊 Use Sample Product Analytics Data"):
-            with st.spinner("Generating sample data..."):
-                st.session_state.data, st.session_state.data_types, st.session_state.metrics, st.session_state.dimensions, st.session_state.time_columns = prepare_sample_data()
-                # Generate auto insights
-                st.session_state.auto_insights = generate_insights(st.session_state.data)
-                st.success("✅ Sample product analytics data loaded!")
+            st.error(f"Error loading saved datasets: {e}")
     
     # Add data info section
     if st.session_state.data is not None:
         st.markdown("---")
         st.subheader("Data Overview")
+        
+        # Dataset Name
+        if st.session_state.current_dataset_name:
+            st.markdown(f"""
+            <div style="margin-bottom: 1rem;">
+                <strong>Dataset:</strong> {st.session_state.current_dataset_name}
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Save dataset option
+        with st.expander("💾 Save Current Dataset"):
+            dataset_name = st.text_input("Dataset Name", value=st.session_state.current_dataset_name)
+            dataset_desc = st.text_area("Description (optional)", height=80)
+            
+            if st.button("Save Dataset"):
+                if dataset_name:
+                    with st.spinner("Saving dataset to database..."):
+                        try:
+                            dataset_id = save_dataset(st.session_state.data, dataset_name, dataset_desc)
+                            st.session_state.current_dataset_id = dataset_id
+                            st.session_state.current_dataset_name = dataset_name
+                            st.success(f"Dataset '{dataset_name}' saved successfully!")
+                        except Exception as e:
+                            st.error(f"Error saving dataset: {e}")
+                else:
+                    st.error("Please enter a dataset name.")
         
         # Metrics count
         st.markdown(f"""
@@ -268,12 +384,13 @@ if st.session_state.data is not None:
     st.markdown('<div class="tab-container">', unsafe_allow_html=True)
     
     # Create tabs with icons
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 Overview", 
         "📈 Interactive Dashboard", 
         "📆 Trend Analysis", 
         "🔍 Segmentation", 
-        "🤖 AI Assistant"
+        "🤖 AI Assistant",
+        "💾 Saved Analyses"
     ])
     
     with tab1:
