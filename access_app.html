@@ -28,6 +28,7 @@
             font-size: 2.5rem;
             background: linear-gradient(120deg, #4361ee, #4cc9f0);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 1rem;
             line-height: 1.2;
@@ -262,39 +263,40 @@
             <p style="margin-bottom: 0.5rem;">Select any available port to access your dashboard:</p>
             
             <div class="port-buttons">
+                <a href="http://localhost:5000" class="port-button" target="_blank" id="port-5000">Port 5000 <span style="color: #10b981; font-size: 0.8rem;">✓ Primary</span></a>
                 <a href="http://localhost:8501" class="port-button" target="_blank" id="port-8501">Port 8501</a>
                 <a href="http://localhost:8502" class="port-button" target="_blank" id="port-8502">Port 8502</a>
-                <a href="http://localhost:8503" class="port-button" target="_blank" id="port-8503">Port 8503 <span style="color: #10b981; font-size: 0.8rem;">✓ Latest</span></a>
+                <a href="http://localhost:8503" class="port-button" target="_blank" id="port-8503">Port 8503</a>
             </div>
         </div>
         
         <div class="buttons">
-            <a href="http://localhost:8503" class="button" target="_blank">Open ProductPulse Dashboard</a>
-            <a href="http://localhost:5000" class="button button-secondary" target="_blank">Open Gateway Portal</a>
+            <a href="http://localhost:5000" class="button" target="_blank">Open ProductPulse Dashboard</a>
+            <a href="http://localhost:5000/gateway" class="button button-secondary" target="_blank">Open Gateway Portal</a>
         </div>
         
         <div class="status">
             <h3>Application Status</h3>
             <div class="status-item">
                 <div class="status-indicator active"></div>
-                <span>Streamlit App: Running on ports 8501/8502/8503</span>
+                <span>Streamlit App: Running on port 5000 (primary)</span>
             </div>
             <div class="status-item">
                 <div class="status-indicator active"></div>
-                <span>Flask Gateway: Running on port 5000</span>
+                <span>PostgreSQL Database: Connected (Neon Cloud)</span>
             </div>
             <div class="status-item">
                 <div class="status-indicator active"></div>
-                <span>SQLite Database: Initialized</span>
+                <span>AI Assistant: Ready</span>
             </div>
         </div>
         
         <div class="links">
             <p>Alternate Access URLs:</p>
+            <a href="http://127.0.0.1:5000">http://127.0.0.1:5000 (Primary)</a>
             <a href="http://127.0.0.1:8501">http://127.0.0.1:8501</a>
             <a href="http://127.0.0.1:8502">http://127.0.0.1:8502</a>
             <a href="http://127.0.0.1:8503">http://127.0.0.1:8503</a>
-            <a href="http://127.0.0.1:5000">http://127.0.0.1:5000</a>
         </div>
     </div>
     
@@ -313,32 +315,28 @@
         }
         
         async function updateStatus() {
+            const streamlit5000 = await checkServer('http://localhost:5000');
             const streamlit8501 = await checkServer('http://localhost:8501');
             const streamlit8502 = await checkServer('http://localhost:8502');
             const streamlit8503 = await checkServer('http://localhost:8503');
-            const flaskActive = await checkServer('http://localhost:5000');
             
             // Update port button styling
+            document.getElementById('port-5000').classList.toggle('active', streamlit5000);
             document.getElementById('port-8501').classList.toggle('active', streamlit8501);
             document.getElementById('port-8502').classList.toggle('active', streamlit8502);
             document.getElementById('port-8503').classList.toggle('active', streamlit8503);
             
             // Show any active streamlit port
-            const streamlitActive = streamlit8501 || streamlit8502 || streamlit8503;
+            const streamlitActive = streamlit5000 || streamlit8501 || streamlit8502 || streamlit8503;
             
             document.querySelectorAll('.status-item')[0].querySelector('.status-indicator')
                 .classList.toggle('active', streamlitActive);
             document.querySelectorAll('.status-item')[0].querySelector('.status-indicator')
                 .classList.toggle('inactive', !streamlitActive);
             
-            document.querySelectorAll('.status-item')[1].querySelector('.status-indicator')
-                .classList.toggle('active', flaskActive);
-            document.querySelectorAll('.status-item')[1].querySelector('.status-indicator')
-                .classList.toggle('inactive', !flaskActive);
-            
             // Update button visibility
             document.querySelectorAll('.button')[0].style.opacity = streamlitActive ? '1' : '0.5';
-            document.querySelectorAll('.button')[1].style.opacity = flaskActive ? '1' : '0.5';
+            document.querySelectorAll('.button')[1].style.opacity = streamlitActive ? '1' : '0.5';
         }
         
         // Check status when page loads

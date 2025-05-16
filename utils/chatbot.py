@@ -108,33 +108,33 @@ def process_query(query, df):
     
     # Try to use Gemini API if available
     if HAS_GEMINI:
-        # Prepare complete prompt
-        prompt = f"""
-        You are a data analyst assistant for product managers. You help analyze product analytics data.
-        
-        The user will ask you questions about their data. Respond with clear, concise insights.
-        
-        Here is information about the data:
-        Number of rows: {len(df)}
-        Number of columns: {len(df.columns)}
-        
-        Columns:
-        {chr(10).join(columns_description)}
-        
-        Data summary: {data_summary_str}
-        
-        User query: {query}
-        
-        When answering:
-        1. Interpret what analysis they're looking for
-        2. Provide a direct answer based on the data
-        3. Add 1-2 additional insights if relevant
-        4. When suggesting visualizations, be specific about chart type and variables
-        5. For trend analysis, note any patterns or anomalies
-        
-        Keep responses friendly and clear. Avoid technical jargon unless specifically requested.
-        """
-        
+    # Prepare complete prompt
+    prompt = f"""
+    You are a data analyst assistant for product managers. You help analyze product analytics data.
+    
+    The user will ask you questions about their data. Respond with clear, concise insights.
+    
+    Here is information about the data:
+    Number of rows: {len(df)}
+    Number of columns: {len(df.columns)}
+    
+    Columns:
+    {chr(10).join(columns_description)}
+    
+    Data summary: {data_summary_str}
+    
+    User query: {query}
+    
+    When answering:
+    1. Interpret what analysis they're looking for
+    2. Provide a direct answer based on the data
+    3. Add 1-2 additional insights if relevant
+    4. When suggesting visualizations, be specific about chart type and variables
+    5. For trend analysis, note any patterns or anomalies
+    
+    Keep responses friendly and clear. Avoid technical jargon unless specifically requested.
+    """
+    
         # Call Gemini API directly
         response_text = call_gemini_api(prompt)
         if response_text:
@@ -424,38 +424,38 @@ def generate_insights(df):
     
     # Try to use Gemini API if available
     if HAS_GEMINI:
-        # Prepare prompt
-        prompt = f"""
-        You are a data analyst assistant for product managers. You help analyze product analytics data.
-        
-        Based on the following data summary and sample, generate 3-5 key insights. 
-        
-        Data summary: {data_summary_str}
-        
-        Sample data: {data_sample_str}
-        
-        Focus on:
-        1. Patterns in the data that might be relevant to product managers
-        2. Potential areas of concern or opportunity
-        3. Interesting relationships between variables
-        4. Suggestions for further analysis
-        
-        Format your response as a bulleted list of insights, with each bullet starting with "- ".
-        """
-        
+    # Prepare prompt
+    prompt = f"""
+    You are a data analyst assistant for product managers. You help analyze product analytics data.
+    
+    Based on the following data summary and sample, generate 3-5 key insights. 
+    
+    Data summary: {data_summary_str}
+    
+    Sample data: {data_sample_str}
+    
+    Focus on:
+    1. Patterns in the data that might be relevant to product managers
+    2. Potential areas of concern or opportunity
+    3. Interesting relationships between variables
+    4. Suggestions for further analysis
+    
+    Format your response as a bulleted list of insights, with each bullet starting with "- ".
+    """
+    
         # Call Gemini API directly
         response_text = call_gemini_api(prompt)
         if response_text:
             # Extract the insights from the response
             insights = [line.strip().replace("- ", "") for line in response_text.split("\n") if line.strip().startswith("- ")]
-            
-            # If no insights were extracted with the bullet format, try to extract sentences
-            if not insights:
+        
+        # If no insights were extracted with the bullet format, try to extract sentences
+        if not insights:
                 insights = [sentence.strip() for sentence in response_text.split(".") if sentence.strip()]
-                if len(insights) > 5:
-                    insights = insights[:5]  # Limit to 5 insights
-            
-            return insights
+            if len(insights) > 5:
+                insights = insights[:5]  # Limit to 5 insights
+                
+        return insights
     
     # FALLBACK: Generate basic insights
     return generate_rule_based_insights(df)

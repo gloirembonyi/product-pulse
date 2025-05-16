@@ -20,7 +20,7 @@ from sklearn.cluster import KMeans
 
 # Set page config with a modern look
 st.set_page_config(
-    page_title="ProductPulse Analytics",
+    page_title="Analytics",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -442,6 +442,33 @@ if 'saved_analyses' not in st.session_state:
 if 'page' not in st.session_state:
     st.session_state.page = 'home'
 
+# Try to load saved datasets and analyses from the database when app initializes
+if 'datasets_loaded' not in st.session_state:
+    try:
+        # Fetch all saved datasets
+        saved_datasets = get_saved_datasets()
+        if not saved_datasets.empty:
+            st.session_state.saved_datasets = saved_datasets
+            
+        # Fetch all saved analyses
+        saved_analyses = get_saved_analyses()
+        if not saved_analyses.empty:
+            st.session_state.saved_analyses = saved_analyses
+            
+        # If we had a dataset ID from previous session, try to load it
+        if st.session_state.current_dataset_id is not None:
+            try:
+                load_saved_dataset(st.session_state.current_dataset_id)
+            except:
+                # If loading fails, just continue without the dataset
+                pass
+                
+        # Mark as done to avoid reloading on every rerun
+        st.session_state.datasets_loaded = True
+    except Exception as e:
+        print(f"Error loading database items on startup: {e}")
+        # Continue without saved data - user can still upload new data
+
 # Helper functions
 def add_logo():
     """Add a modern logo to the sidebar"""
@@ -478,60 +505,133 @@ def display_how_to_use():
     """Display professional how-to-use instructions with step-by-step guidance"""
     st.markdown("## How to Use ProductPulse Analytics")
     
-    # Create a container for the how-to section
-    with st.container():
-        # Add a pro badge
-        st.markdown("<div style='text-align: right;'><span style='background: linear-gradient(45deg, #ff6b6b, #ff8e53); color: white; padding: 0.2rem 0.6rem; border-radius: 30px; font-size: 0.8rem; font-weight: 600; box-shadow: 0 2px 8px rgba(255, 107, 107, 0.4);'>PRO</span></div>", unsafe_allow_html=True)
+    # Create a container with compact styling
+    st.markdown("""
+    <style>
+    .how-to-container {
+        background: white;
+        border-radius: 0.8rem;
+        padding: 1rem;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        margin-bottom: 1rem;
+        border-left: 4px solid #4361ee;
+        position: relative;
+    }
+    .step-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        padding: 0.4rem;
+        border-radius: 0.4rem;
+        transition: all 0.2s ease;
+    }
+    .step-row:hover {
+        background: rgba(236, 240, 253, 0.7);
+        transform: translateX(3px);
+    }
+    .step-number {
+        background: linear-gradient(120deg, #4361ee, #4cc9f0);
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 0.8rem;
+        margin-right: 0.8rem;
+        flex-shrink: 0;
+    }
+    .step-content {
+        flex: 1;
+    }
+    .step-title {
+        font-weight: 600;
+        color: #2b2d42;
+        margin-bottom: 0.1rem;
+        font-size: 0.95rem;
+    }
+    .step-desc {
+        font-size: 0.8rem;
+        color: #6c757d;
+        margin: 0;
+    }
+    .pro-badge {
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+        color: white;
+        padding: 0.15rem 0.5rem;
+        border-radius: 30px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        box-shadow: 0 2px 5px rgba(255, 107, 107, 0.4);
+    }
+    .pro-tip {
+        background: rgba(255, 107, 107, 0.1);
+        border-left: 3px solid #ff6b6b;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+        border-radius: 0.4rem;
+    }
+    </style>
+    
+    <div class="how-to-container">
+        <div class="pro-badge">PRO</div>
         
-        # Step 1
-        col1, col2 = st.columns([1, 9])
-        with col1:
-            st.markdown("<div style='background: var(--gradient); color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem;'>1</div>", unsafe_allow_html=True)
-        with col2:
-            st.markdown("#### Upload Your Data")
-            st.markdown("Import CSV files containing your product analytics data or use our sample datasets to get started quickly.")
+        <div class="step-row">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <div class="step-title">Upload Your Data</div>
+                <div class="step-desc">Import CSV files containing your product data or use our sample datasets to get started</div>
+            </div>
+        </div>
         
-        # Step 2
-        col1, col2 = st.columns([1, 9])
-        with col1:
-            st.markdown("<div style='background: var(--gradient); color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem;'>2</div>", unsafe_allow_html=True)
-        with col2:
-            st.markdown("#### Explore Interactive Dashboard")
-            st.markdown("Visualize key metrics and dimensions with customizable charts and gain immediate insights from your data.")
+        <div class="step-row">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <div class="step-title">Explore Interactive Dashboard</div>
+                <div class="step-desc">Visualize key metrics with customizable charts and gain immediate insights</div>
+            </div>
+        </div>
         
-        # Step 3
-        col1, col2 = st.columns([1, 9])
-        with col1:
-            st.markdown("<div style='background: var(--gradient); color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem;'>3</div>", unsafe_allow_html=True)
-        with col2:
-            st.markdown("#### Analyze Trends Over Time")
-            st.markdown("Identify patterns, seasonality, and anomalies in your product metrics to understand user behavior changes.")
+        <div class="step-row">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <div class="step-title">Analyze Trends Over Time</div>
+                <div class="step-desc">Identify patterns, seasonality, and anomalies in your metrics</div>
+            </div>
+        </div>
         
-        # Step 4
-        col1, col2 = st.columns([1, 9])
-        with col1:
-            st.markdown("<div style='background: var(--gradient); color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem;'>4</div>", unsafe_allow_html=True)
-        with col2:
-            st.markdown("#### Segment Your Users")
-            st.markdown("Compare different user groups to discover which segments perform best and where opportunities exist.")
+        <div class="step-row">
+            <div class="step-number">4</div>
+            <div class="step-content">
+                <div class="step-title">Segment Your Users</div>
+                <div class="step-desc">Compare different user groups to discover what drives performance</div>
+            </div>
+        </div>
         
-        # Step 5
-        col1, col2 = st.columns([1, 9])
-        with col1:
-            st.markdown("<div style='background: var(--gradient); color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem;'>5</div>", unsafe_allow_html=True)
-        with col2:
-            st.markdown("#### Ask Questions in Natural Language")
-            st.markdown("Use our AI-powered chat interface to analyze your data through simple conversational queries.")
+        <div class="step-row">
+            <div class="step-number">5</div>
+            <div class="step-content">
+                <div class="step-title">Ask Questions in Natural Language</div>
+                <div class="step-desc">Use our AI-powered assistant to analyze data through simple conversational queries</div>
+            </div>
+        </div>
         
-        # Pro Tip
-        with st.container():
-            st.markdown("---")
-            col1, col2 = st.columns([1, 9])
-            with col1:
-                st.markdown("<div style='background: linear-gradient(45deg, #ff6b6b, #ff8e53); color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.9rem;'>✨</div>", unsafe_allow_html=True)
-            with col2:
-                st.markdown("#### Pro Tip")
-                st.markdown("Save your analyses to quickly access insights in the future. Share dashboards with your team for collaborative decision-making.")
+        <div class="pro-tip">
+            <div style="display: flex; align-items: center;">
+                <div style="font-size: 1rem; margin-right: 0.5rem;">✨</div>
+                <div>
+                    <strong style="font-size: 0.85rem;">Pro Tip:</strong>
+                    <span style="font-size: 0.8rem;"> Save analyses for quick access and share insights with your team</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Functions for database operations
 def load_saved_dataset(dataset_id):
@@ -563,6 +663,24 @@ def load_saved_dataset(dataset_id):
             return True
     except Exception as e:
         st.error(f"Error loading dataset: {e}")
+        return False
+
+def refresh_database_data():
+    """Refresh dataset and analysis information from the database"""
+    try:
+        # Fetch all saved datasets
+        saved_datasets = get_saved_datasets()
+        if not saved_datasets.empty:
+            st.session_state.saved_datasets = saved_datasets
+            
+        # Fetch all saved analyses
+        saved_analyses = get_saved_analyses()
+        if not saved_analyses.empty:
+            st.session_state.saved_analyses = saved_analyses
+            
+        return True
+    except Exception as e:
+        print(f"Error refreshing database data: {e}")
         return False
 
 # Sidebar for data upload and configuration
@@ -648,9 +766,26 @@ with st.sidebar:
     with input_tab2:
         st.header("Saved Datasets")
         
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.subheader("Available Datasets")
+        with col2:
+            if st.button("🔄", help="Refresh dataset list from database"):
+                with st.spinner("Refreshing database information..."):
+                    if refresh_database_data():
+                        st.success("Database information refreshed!")
+                    else:
+                        st.error("Failed to refresh database information")
+        
         # Display saved datasets
         try:
+            # Use cached datasets if available, otherwise fetch from database
+            if hasattr(st.session_state, 'saved_datasets') and st.session_state.saved_datasets is not None:
+                saved_datasets = st.session_state.saved_datasets
+            else:
             saved_datasets = get_saved_datasets()
+                if not saved_datasets.empty:
+                    st.session_state.saved_datasets = saved_datasets
             
             if not saved_datasets.empty:
                 # Format the dataset list
@@ -671,6 +806,8 @@ with st.sidebar:
                     with col2:
                         if st.button(f"🗑️ Delete", key=f"delete_{row['id']}"):
                             if delete_dataset(row['id']):
+                                # Also refresh the dataset list in session state
+                                refresh_database_data()
                                 st.success(f"Dataset '{row['name']}' deleted.")
                                 st.rerun()
             else:
@@ -704,6 +841,10 @@ with st.sidebar:
                             dataset_id = save_dataset(st.session_state.data, dataset_name, dataset_desc)
                             st.session_state.current_dataset_id = dataset_id
                             st.session_state.current_dataset_name = dataset_name
+                            
+                            # Update saved datasets in session state
+                            refresh_database_data()
+                            
                             st.success(f"Dataset '{dataset_name}' saved successfully!")
                         except Exception as e:
                             st.error(f"Error saving dataset: {e}")
@@ -1222,13 +1363,13 @@ if st.session_state.data is not None:
                     if isinstance(chat, dict):
                         # User messages
                         if chat.get("role") == "user":
-                            st.markdown(f"""
+                st.markdown(f"""
                             <div class="chat-message user-message">
                                 <div class="chat-message-content">
                                     <div style="font-weight: 500;">{chat.get("content", "")}</div>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                </div>
+                </div>
+                """, unsafe_allow_html=True)
                         # AI messages
                         elif chat.get("role") == "assistant":
                             st.markdown(f"""
@@ -1289,7 +1430,7 @@ if st.session_state.data is not None:
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            
+        
             # Chat input form with better styling
             st.markdown("""
             <style>
@@ -1319,8 +1460,8 @@ if st.session_state.data is not None:
             # Chat input
             with st.form("chat_form", clear_on_submit=True):
                 col1, col2 = st.columns([6, 1])
-                
-                with col1:
+        
+        with col1:
                     user_input = st.text_input(
                         "Ask about your data",
                         label_visibility="collapsed",
@@ -1329,7 +1470,7 @@ if st.session_state.data is not None:
                     )
                 
                 # Submit button with proper styling
-                with col2:
+        with col2:
                     submit_button = st.form_submit_button(
                         "Send",
                         type="primary",
@@ -1384,8 +1525,8 @@ if st.session_state.data is not None:
             if submit_button and user_input:
                 # Set thinking state
                 st.session_state.thinking = True
-                st.rerun()
-
+                    st.rerun()
+        
             # If we're thinking and not just after hitting submit, process the query
             if st.session_state.get("thinking", False) and not (submit_button and user_input):
                 # Add user message to chat history
@@ -1405,15 +1546,32 @@ if st.session_state.data is not None:
                 
                 # Reset thinking state
                 st.session_state.thinking = False
-                st.rerun()
-    
+                    st.rerun()
+        
     with tab6:
         # Saved Analyses Section
         st.header("Saved Analyses")
         
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.subheader("Available Analyses")
+        with col2:
+            if st.button("🔄 Refresh Analyses", help="Refresh analyses list from database"):
+                with st.spinner("Refreshing database information..."):
+                    if refresh_database_data():
+                        st.success("Analyses refreshed!")
+                    else:
+                        st.error("Failed to refresh analyses")
+        
         # Display saved analyses
         try:
-            saved_analyses = get_saved_analyses()
+            # Use cached analyses if available, otherwise fetch from database
+            if hasattr(st.session_state, 'saved_analyses') and st.session_state.saved_analyses is not None:
+                saved_analyses = st.session_state.saved_analyses
+            else:
+                saved_analyses = get_saved_analyses()
+                if not saved_analyses.empty:
+                    st.session_state.saved_analyses = saved_analyses
             
             if not saved_analyses.empty:
                 # Format the analysis list
@@ -1434,14 +1592,16 @@ if st.session_state.data is not None:
                     with col2:
                         if st.button(f"🗑️ Delete", key=f"delete_{row['id']}"):
                             if delete_analysis(row['id']):
+                                # Also refresh the analyses list in session state
+                                refresh_database_data()
                                 st.success(f"Analysis '{row['name']}' deleted.")
-                                st.rerun()
+                    st.rerun()
             else:
                 st.info("No saved analyses found. Create a new analysis and save it first.")
                 
-        except Exception as e:
+                except Exception as e:
             st.error(f"Error loading saved analyses: {e}")
-
+    
     # Close the dashboard container
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -1787,7 +1947,7 @@ if __name__ == "__main__":
         st.markdown('<p class="sub-header">Advanced data insights for product managers</p>', unsafe_allow_html=True)
     
     with col2:
-        st.markdown("""
+    st.markdown("""
         <div style="text-align: right; margin-top: 1rem;">
             <span class="status-indicator status-active"></span> <span style="font-size: 0.9rem; color: #10b981; font-weight: 500;">System Online</span>
         </div>
@@ -1862,7 +2022,7 @@ if __name__ == "__main__":
                             <div class="metric-label">{metric}</div>
                             <div class="metric-value">{format_number(metric_value)}</div>
                             <div class="metric-label">Average {metric}</div>
-                        </div>
+        </div>
                         """, unsafe_allow_html=True)
         else:
             st.info("Please upload data or use a sample dataset to get started.")
@@ -1904,7 +2064,7 @@ if __name__ == "__main__":
                         st.markdown(f"""
                         <div class="insight-card">
                             {insight}
-                        </div>
+        </div>
                         """, unsafe_allow_html=True)
         else:
             st.info("Please upload data with time columns to analyze trends.")
@@ -1954,7 +2114,7 @@ if __name__ == "__main__":
                         st.markdown(f"""
                         <div class="insight-card">
                             {insight}
-                        </div>
+        </div>
                         """, unsafe_allow_html=True)
         else:
             st.info("Please upload data with categorical columns to perform segmentation.")
@@ -2036,7 +2196,7 @@ if __name__ == "__main__":
                                 <div class="chat-message user-message">
                                     <div class="chat-message-content">
                                         <div style="font-weight: 500;">{chat.get("content", "")}</div>
-                                    </div>
+        </div>
                                 </div>
                                 """, unsafe_allow_html=True)
                             # AI messages
@@ -2090,10 +2250,10 @@ if __name__ == "__main__":
                 <div class="suggestion-chip-container">
                     <div class="suggestion-chip" onclick="document.querySelector('[data-testid=\\'stText-input-chat_input\\'] input').value='Summarize key metrics'; document.querySelector('form[data-testid=\\'stForm\\'] button').click();">
                         Summarize key metrics
-                    </div>
+        </div>
                     <div class="suggestion-chip" onclick="document.querySelector('[data-testid=\\'stText-input-chat_input\\'] input').value='Identify patterns in the data'; document.querySelector('form[data-testid=\\'stForm\\'] button').click();">
                         Identify patterns
-                    </div>
+    </div>
                     <div class="suggestion-chip" onclick="document.querySelector('[data-testid=\\'stText-input-chat_input\\'] input').value='Suggest improvements based on the data'; document.querySelector('form[data-testid=\\'stForm\\'] button').click();">
                         Suggest improvements
                     </div>
@@ -2187,8 +2347,8 @@ if __name__ == "__main__":
                                 <div class="dot"></div>
                             </div>
                         </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+    </div>
+    """, unsafe_allow_html=True)
                 
                 # Process the user input
                 if submit_button and user_input:
@@ -2306,8 +2466,27 @@ if __name__ == "__main__":
                             help="Controls how much data is cached locally")
             
             if st.button("Clear All Cache"):
-                for key in list(st.session_state.keys()):
-                    if key not in ['page', 'gemini_configured']:
+                # Only clear data-related variables
+                data_keys = [
+                    'data', 'data_types', 'metrics', 'dimensions', 'time_columns', 
+                    'chat_history', 'auto_insights', 'dashboard_tab', 'refresh_insights',
+                    'thinking', 'last_query'
+                ]
+                for key in data_keys:
+                    if key in st.session_state:
                         st.session_state.pop(key, None)
-                st.success("Cache cleared successfully!")
+                        
+                # Don't clear 'current_dataset_id' - we'll use this to reload data
+                dataset_id = st.session_state.get('current_dataset_id')
+                
+                st.success("Data cache cleared successfully!")
+                
+                # If we had a dataset loaded, reload it
+                if dataset_id:
+                    try:
+                        load_saved_dataset(dataset_id)
+                        st.info(f"Reloaded dataset from database")
+                    except Exception as e:
+                        st.error(f"Could not reload dataset: {e}")
+                        
                 st.rerun()
