@@ -4,9 +4,22 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
+import json
+import streamlit as st
+import sqlite3
 
-# Get the database URL from environment variables or use a default SQLite database
-DATABASE_URL = os.environ.get("DATABASE_URL") or "sqlite:///productpulse.db"
+# Get the database URL from environment variables or use the Neon PostgreSQL connection
+DATABASE_URL = os.environ.get("DATABASE_URL") or "postgresql://neondb_owner:npg_E3By5fYHDgak@ep-silent-fog-a48gwvbn-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require"
+
+# Function to get SQLite connection (used by certain functions)
+def get_connection():
+    try:
+        # For SQLite local file
+        sqlite_file = "productpulse.db"
+        return sqlite3.connect(sqlite_file)
+    except Exception as e:
+        print(f"Error connecting to SQLite: {e}")
+        return None
 
 # Set up SQLAlchemy but handle connection errors gracefully
 try:
@@ -306,7 +319,6 @@ def save_analysis(dataset_id, name, analysis_type, configuration, insights, desc
     """
     try:
         # Convert configuration and insights to JSON strings
-        import json
         config_json = json.dumps(configuration)
         insights_json = json.dumps(insights)
         
@@ -399,7 +411,6 @@ def load_analysis(analysis_id):
             raise ValueError(f"Analysis with ID {analysis_id} not found")
         
         # Convert JSON strings back to Python objects
-        import json
         configuration = json.loads(analysis_info['configuration'])
         insights = json.loads(analysis_info['insights'])
         
@@ -432,4 +443,41 @@ def delete_analysis(analysis_id):
     except Exception as e:
         session.rollback()
         print(f"Error deleting analysis: {e}")
+        return False
+
+def load_saved_analysis(analysis_id):
+    """Load an analysis from the database"""
+    try:
+        # Get analysis info using SQLAlchemy
+        stmt = select(saved_analysis).where(saved_analysis.c.id == analysis_id)
+        analysis_info = session.execute(stmt).fetchone()
+        
+        if not analysis_info:
+            return False
+            
+        # Load configuration and insights
+        configuration = json.loads(analysis_info['configuration'])
+        insights = json.loads(analysis_info['insights'])
+        
+        # Also load the dataset this analysis is associated with
+        dataset_id = analysis_info['dataset_id']
+        df, column_data = load_dataset(dataset_id)
+        
+        # Set session state variables
+        st.session_state.data = df
+        st.session_state.metrics = column_data[column_data['is_metric']]['name'].tolist()
+        st.session_state.dimensions = column_data[column_data['is_dimension']]['name'].tolist()
+        st.session_state.time_columns = column_data[column_data['is_time']]['name'].tolist()
+        st.session_state.current_dataset_id = dataset_id
+        
+        # Set analysis specific variables from configuration
+        for key, value in configuration.items():
+            st.session_state[key] = value
+            
+        # Store insights
+        st.session_state.auto_insights = insights
+        
+        return True
+    except Exception as e:
+        print(f"Error loading analysis: {e}")
         return False
